@@ -15,6 +15,7 @@ type PriorityQueue[T any] interface {
 	Push(T)
 	Pop() T
 	Top() T
+	Items() []T
 }
 
 type priorityQueue[T any] struct {
@@ -25,16 +26,12 @@ type priorityQueue[T any] struct {
 
 // NewPriorityQueue create a thread-safe priority queue with given comparator. The comparator must not be nil.
 func NewPriorityQueue[T any](data []T, comparator func(T, T) bool) PriorityQueue[T] {
-	items := make([]*indexedItem[T], len(data))
-	for i := 0; i < len(data); i++ {
-		items[i] = &indexedItem[T]{value: data[i], index: i}
-	}
 	in := &priorityQueue[T]{
-		items:      items,
+		items:      make([]*indexedItem[T], 0),
 		comparator: comparator,
 	}
-	for i := len(data) - 1; i >= 0; i-- {
-		in.fix(i)
+	for i := 0; i < len(data); i++ {
+		in.Push(data[i])
 	}
 	return in
 }
@@ -81,10 +78,10 @@ func (in *priorityQueue[T]) fix(index int) {
 	i := index
 	for { // down fix
 		left, right, top := 2*i+1, 2*i+2, i
-		if left < len(in.items) && in.comparator(in.items[top].value, in.items[left].value) {
+		if left < len(in.items) && in.comparator(in.items[left].value, in.items[top].value) {
 			top = left
 		}
-		if right < len(in.items) && in.comparator(in.items[top].value, in.items[right].value) {
+		if right < len(in.items) && in.comparator(in.items[right].value, in.items[top].value) {
 			top = right
 		}
 		if i == top {
@@ -96,12 +93,24 @@ func (in *priorityQueue[T]) fix(index int) {
 	if i != index {
 		return
 	}
-	for { // up fix
+	for i > 0 { // up fix
 		parent := (i - 1) >> 1
-		if i == parent || !in.comparator(in.items[i].value, in.items[i].value) {
+		if i == parent || !in.comparator(in.items[i].value, in.items[parent].value) {
 			break
 		}
 		in.swap(i, parent)
 		i = parent
 	}
+}
+
+// Items return a copy of array values
+func (in *priorityQueue[T]) Items() []T {
+	in.mu.RLock()
+	defer in.mu.RUnlock()
+	length := len(in.items)
+	arr := make([]T, length)
+	for i := 0; i < length; i++ {
+		arr[i] = in.items[i].value
+	}
+	return arr
 }
